@@ -1,14 +1,14 @@
-# Architecture and integration decision
+# アーキテクチャと統合方針
 
-## Evidence status
+## 調査情報の確度
 
-`PLAN.md` reports `eic-ks/ai_template_docker` as a Python 3.12/uv Dev Container template with Dockerfile, devcontainer settings, and sample project files. A direct live GitHub fetch failed in this environment (cache miss), so this is inherited information, not fresh verification. Confirm its current `master` tree, license, history, and runtime behavior before adopting or moving files.
+`PLAN.md` によると、既存の `eic-ks/ai_template_docker` はPython 3.12とuvを使うDev Containerテンプレートで、Dockerfile、Dev Container設定、サンプルプロジェクトを含みます。この環境からGitHubの最新状態を取得できなかったため、これは計画書から引き継いだ情報であり、最新実装の確認結果ではありません。ファイルの移動や採用の前に、現在の `master` ブランチ、ライセンス、履歴、実行時の挙動を確認してください。
 
-## Responsibility boundary
+## 責務の境界
 
-`dev` owns portable command routing, user-level configuration, agent selection and launch, and read-only diagnostics. A sandbox implementation owns image/container construction, isolation, mounts, credential handoff, and network policy. Docker-specific flags do not belong in agent or env modules.
+`dev` は移植可能なコマンド振り分け、ユーザー設定、エージェントの選択と起動、読み取り専用の環境診断を担当します。サンドボックス実装はイメージやコンテナの構築、隔離、マウント、認証情報の受け渡し、ネットワーク制御を担当します。Docker固有の引数をagentやenvの各モジュールに直接埋め込みません。
 
-Provisional adapter contract:
+アダプターの暫定インターフェース案:
 
 ```text
 <adapter> doctor [--json]
@@ -16,27 +16,27 @@ Provisional adapter contract:
 <adapter> stop <session-id>
 ```
 
-The scaffold currently checks only that a configured adapter executable exists. This proposal is not validated against `ai_template_docker`.
+現状の骨組みが確認するのは、設定されたアダプター実行ファイルが存在することだけです。このインターフェース案は `ai_template_docker` で検証していません。
 
-## Integration options
+## 統合方法の比較
 
-| Option | Advantages | Costs / risks | Current fit |
+| 方法 | 利点 | コスト・リスク | 現時点での評価 |
 | --- | --- | --- | --- |
-| Keep independent | Preserves release cadence, history, and standalone use | Coordinate two repos and versions | Best while responsibilities are uncertain |
-| External CLI adapter | Clear boundary; no copied source; can pin a release/revision | Requires stable CLI and compatibility policy | Preferred first integration |
-| Git subtree | Source and history can live in one repo; upstream can remain standalone | Sync workflow and imported history need ownership | Revisit if code-level integration is frequent |
-| History-preserving monorepo import | One release and tests; natural module ownership | Migration and upstream divergence burden | Consider after requirements mature |
-| Git submodule | Explicit upstream commit pin | More complex clone/update experience | Not for MVP |
+| 独立維持 | リリース周期、履歴、単独利用を維持できる | 2つのリポジトリとバージョンを調整する必要がある | 責務が固まるまでは最適 |
+| 外部CLIアダプター | 境界が明確でソースの複製が不要。リビジョンを固定できる | 安定したCLIと互換性方針が必要 | 最初の連携方法として推奨 |
+| Git subtree | 履歴を保って1つのリポジトリに含められ、上流も独立維持できる | 同期手順と取り込み履歴の管理が必要 | コード連携が頻繁になったら再検討 |
+| 履歴を保ったモノレポ統合 | リリースとテストを一元管理でき、モジュールとして扱いやすい | 移行と上流との差分管理の負担が大きい | 要件が固まってから検討 |
+| Git submodule | 上流の特定コミットを明示できる | cloneと更新の手順が複雑になる | MVPでは採用しない |
 
-Keep `ai_template_docker` independent for now. Based on the plan's description, it is a development template, not a hardened agent sandbox; do not claim security properties it has not demonstrated. Its Python/Kaggle image could later become an `ai-research` profile. An agent sandbox needs separate threat modeling and validation.
+現時点では `ai_template_docker` を独立維持します。計画書の説明からは開発用テンプレートであり、強化済みのAIエージェント用サンドボックスとは確認できません。実証されていないセキュリティ特性をうたわないでください。Python/Kaggle用イメージは将来 `ai-research` プロファイルとして扱える可能性があります。エージェント用サンドボックスには、別途脅威分析と検証が必要です。
 
-## MVP sequence
+## MVPの順序
 
-1. Establish `dev` routing and a GitHub clone/symlink installer.
-2. Add read-only diagnostics for mise, Git, Python, uv, Docker, SSH, and Codex, with JSON output.
-3. Launch Codex through `codex -m MODEL`. Keep model discovery explicit/configured until the supported interface is verified. Interactive fzf selection reads an optional local catalog.
-4. Define the sandbox adapter interface; add no container lifecycle until the external repository and security requirements are reviewed.
+1. `dev` のコマンド振り分けと、GitHub cloneおよびsymlink形式のインストーラーを整える。
+2. mise、Git、Python、uv、Docker、SSH、Codexを読み取り専用で診断し、JSON出力を用意する。
+3. `codex -m MODEL` でCodexを起動する。利用中のCLIが対応するモデル一覧取得方法を検証するまでは、モデル指定を明示的な設定にする。対話選択にはローカル一覧を使う。
+4. sandboxアダプターの境界を定義する。外部リポジトリと安全要件の確認前に、コンテナのライフサイクル処理は追加しない。
 
-## Migration path
+## 将来の移行
 
-Keep the adapter contract stable while the implementation moves from an external executable to `modules/sandbox/adapters/<name>`. Pin external adapters by immutable release or commit. Preserve upstream license and history if source is imported. A single `sandbox_adapter` config key selects the executable; avoid a plugin registry until there is more than one real adapter.
+外部コマンドから `modules/sandbox/adapters/<name>` 内の実装へ移る場合も、アダプターの契約は維持します。外部アダプターを呼び出す場合は、変更不能なリリースまたはコミットで固定します。ソースを取り込むときは上流のライセンスと履歴を保ちます。アダプターの選択には単一の `sandbox_adapter` 設定キーを使い、実在する実装が複数になるまではプラグイン登録機構を設けません。

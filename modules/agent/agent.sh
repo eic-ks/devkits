@@ -13,14 +13,14 @@ select_model() {
     printf '%s\n' "$model"
     return
   fi
-  devkit_error 'Pass a model, configure codex_model, or install fzf and populate the model catalog.'; return 1
+  devkit_error 'モデル名を指定するか、codex_modelを設定してください。対話選択にはfzfを導入し、モデル一覧を登録してください。'; return 1
 }
 case "${1:-}" in
   model) select_model "${2:-}" ;;
-  launch) command -v codex >/dev/null 2>&1 || { devkit_error 'codex CLI not found'; exit 127; }; model="$(select_model "${2:-}")"; exec codex -m "$model" ;;
+  launch) command -v codex >/dev/null 2>&1 || { devkit_error 'Codex CLIが見つかりません'; exit 127; }; model="$(select_model "${2:-}")"; exec codex -m "$model" ;;
   doctor)
-    if command -v codex >/dev/null 2>&1; then printf 'codex\tavailable\t%s\n' "$(command -v codex)"; else printf 'codex\tmissing\tInstall Codex CLI\n'; fi
-    if command -v fzf >/dev/null 2>&1; then printf 'fzf\tavailable\t%s\n' "$(command -v fzf)"; else printf 'fzf\toptional\tInstall fzf for interactive selection\n'; fi
+    if command -v codex >/dev/null 2>&1; then printf 'codex\t利用可能\t%s\n' "$(command -v codex)"; else printf 'codex\t未導入\tCodex CLIをインストールしてください\n'; fi
+    if command -v fzf >/dev/null 2>&1; then printf 'fzf\t利用可能\t%s\n' "$(command -v fzf)"; else printf 'fzf\t任意\t対話選択を使う場合はfzfをインストールしてください\n'; fi
     ;;
-  *) devkit_error 'unknown agent operation'; exit 2 ;;
+  *) devkit_error 'agentの操作が不明です'; exit 2 ;;
 esac

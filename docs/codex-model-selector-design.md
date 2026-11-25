@@ -1,56 +1,56 @@
-# `cx` Codex model selector: research and design
+# `cx` Codexモデル選択ツール：調査と設計
 
-Status: design proposal; implementation is not part of this change.
+状態：設計案。この変更ではまだ実装していません。
 
-## 1. Current CLI behavior and verification
+## 1. Codex CLIの現行仕様と確認結果
 
-Local inspection on 2026-11-25 found `codex-cli 0.172.0` at `/Users/karatsu/.local/bin/codex`.
+2026-11-25に、この環境の `/Users/karatsu/.local/bin/codex` で `codex-cli 0.172.0` を確認しました。
 
-| Item | Finding | Verification |
+| 項目 | 確認内容 | 確認方法 |
 | --- | --- | --- |
-| `codex -m MODEL` | Supported global option; `--model` is an alias. | `codex --help` |
-| `codex debug models` | Present and emits JSON with a top-level `models` array. | `codex debug models --help`; bundled catalog inspection |
-| Model ID / label | `slug` is the ID to pass to `-m`; `display_name` is the human label; `description` is available. | Inspected bundled JSON through a field-only summary |
-| Visibility | Catalog contains a `visibility` field; this local bundled catalog had 11 `list` and 3 `hide` entries. | Inspected bundled catalog; not compared against `/model` UI |
-| API support | `supported_in_api` is a separate boolean field. Do not infer visibility from it alone. | Inspected bundled catalog |
-| Resume | `codex resume` accepts `--last` and also exposes `-m, --model`. | `codex resume --help` |
-| Resume combination | Help exposes both flags on the same command, so the intended form is `codex resume --last -m MODEL`. The actual continuation effect was not exercised against a real saved session. | CLI parser help only |
-| `/model` relationship | Official user documentation says `/model` chooses the model and reasoning effort for the current session. Exact parity between its picker and `debug models` was not verified. | [Codex CLI documentation](https://developers.openai.com/codex/cli/) |
+| `codex -m MODEL` | 対応しています。`--model` も同じオプションです。 | `codex --help` |
+| `codex debug models` | 利用でき、トップレベルに `models` 配列を持つJSONを出力します。 | `codex debug models --help`、同梱一覧の確認 |
+| モデルIDと表示名 | `slug` が `-m` に渡すID、`display_name` が画面表示用の名前です。`description` もあります。 | 同梱JSONから必要なフィールドだけを抽出 |
+| 表示対象 | カタログに `visibility` フィールドがあります。同梱一覧では `list` が11件、`hide` が3件でした。 | 同梱一覧を確認。`/model` UIとは未比較 |
+| API対応状況 | `supported_in_api` は別のフィールドです。これだけで表示対象かどうかを判定しません。 | 同梱一覧を確認 |
+| resume | `codex resume` は `--last` と `-m, --model` を受け付けます。 | `codex resume --help` |
+| resumeとモデル指定の併用 | ヘルプ上では両方のオプションが使える構成です。想定形は `codex resume --last -m MODEL` ですが、実際の保存済みセッションでは試していません。 | CLIヘルプのみ |
+| `/model` との関係 | 公式ユーザー向けドキュメントでは、`/model` は現在のセッションのモデルと推論量を選ぶ機能です。`debug models` との候補完全一致は未確認です。 | [Codex CLIドキュメント](https://developers.openai.com/codex/cli/) |
 
-The official command reference labels `codex debug models` **Experimental**, describes it as the raw model catalog Codex sees, and documents `--bundled` as skipping remote refresh. It is therefore useful for an adapter with version checks, but is not a stable public API contract. See [Developer commands reference](https://developers.openai.com/codex/developer-commands?surface=cli#codex-debug-models) and the [open-source CLI argument definition](https://github.com/openai/codex/blob/main/codex-rs/cli/src/main.rs).
+公式コマンドリファレンスでは `codex debug models` は **Experimental** とされ、Codexが参照するrawモデルカタログを表示するコマンドと説明されています。`--bundled` はリモートからの更新を省略します。したがって、バージョン差を考慮するアダプターの入力には使えますが、安定した公開API契約とはみなしません。[Developer commandsリファレンス](https://developers.openai.com/codex/developer-commands?surface=cli#codex-debug-models)、[CLIの引数定義](https://github.com/openai/codex/blob/main/codex-rs/cli/src/main.rs)
 
-The default `codex debug models` command was not run: it may refresh the remote catalog and touch Codex-managed cache state outside this workspace. Thus live network behavior, refresh latency/failure codes, account filtering, and config/cache side effects remain unverified here. `--bundled` was run and produced 14 models. The full JSON was not printed; fields such as `base_instructions` and `model_messages` mean the raw output should be treated as potentially sensitive diagnostic data.
+通常の `codex debug models` は実行していません。このコマンドはリモートカタログを更新し、ワークスペース外のCodex管理キャッシュに影響する可能性があります。そのためネットワーク動作、更新時間や失敗時の終了状態、アカウントによる絞り込み、設定・キャッシュへの影響は未確認です。`--bundled` は実行し、14モデルを確認しました。raw JSONには `base_instructions` や `model_messages` などが含まれるため、全体を表示せず、機密情報を含む可能性のある診断データとして扱いました。
 
-The CLI help confirms `-m` but does not by itself prove all configuration precedence or persistence details. Expected behavior is that the explicit invocation flag overrides the configured default for that launch. Do not claim that `/model` never writes settings: its documented effect is on the current session, and persistent side effects need a before/after config check in a controlled TUI session.
+CLIヘルプで `-m` の存在は確認できますが、設定値との優先順位や永続性すべてが証明されたわけではありません。起動時に明示したモデルは、その起動に対する指定として使われる想定です。`/model` が設定ファイルを決して変更しないとは断定しません。公式説明は現在のセッションへの適用を示していますが、永続的な副作用は実際のTUIセッション前後で設定ファイルを比較して確認する必要があります。
 
-## 2. Discovery options and reliability
+## 2. モデル一覧の取得方法と信頼性
 
-| Source | Advantages | Limitations | Recommendation |
+| 取得元 | 利点 | 制約 | 方針 |
 | --- | --- | --- | --- |
-| `codex debug models` | Dynamic catalog Codex itself reads; gives ID, display label, description, visibility, capabilities | Officially Experimental; remote refresh and failure semantics can change; raw JSON includes non-display internal content | Primary adapter for now, behind schema validation and version-aware errors |
-| `codex debug models --bundled` | No network; supported by local CLI help; a deterministic fallback | Stale relative to remote/account catalog; may include hidden models and omit new ones | Use only as explicit offline fallback, and label it bundled/stale |
-| `~/.codex/models_cache.json` | May reflect a prior refresh | Internal file, schema and lifecycle are not a supported interface | Do not read it |
-| Direct models endpoint / undocumented API | Could be dynamic | Authentication and response contract are not public/stable for this use | Do not implement |
-| Hand-maintained model list | Works offline and is easy to understand | Goes stale; conflicts with desired dynamic list | Last-resort user override, never ship a baked-in list as authoritative |
+| `codex debug models` | Codex自身が参照する動的カタログ。ID、表示名、説明、表示対象、機能情報がある | 公式にはExperimental。リモート更新や失敗時の仕様が変わる可能性がある。raw JSONには表示に不要な内部情報も含まれる | スキーマ検証とバージョン差への対応を設けたうえで当面の取得元にする |
+| `codex debug models --bundled` | ネットワーク不要。現行CLIでヘルプと動作を確認できた | リモートやアカウント別の一覧より古い可能性があり、非表示モデルを含んだり新モデルがなかったりする | オフライン時に明示的に選ぶ代替として扱い、同梱一覧だと表示する |
+| `~/.codex/models_cache.json` | 過去に取得した一覧が入っている可能性がある | 内部ファイルで、形式や更新方法の互換性が保証されていない | 読み込まない |
+| モデルAPIへの直接アクセス | 動的な一覧を得られる可能性がある | この用途での認証方法や応答形式は公開・安定した契約ではない | 実装しない |
+| 手作業のモデル一覧 | オフラインでも使え、単純 | 古くなりやすく、動的一覧の要件に合わない | ユーザー定義の最終手段とし、同梱リストを正としない |
 
-The visible selection should initially include entries with `visibility == "list"`, use `slug` as the command ID, and display `display_name` plus optional `description`. That is an evidence-based heuristic, not yet proven to exactly match `/model`; compare both lists on the target account before treating it as parity. Filter output to these allowlisted fields before it reaches the UI or `cx models --json` so instruction-bearing fields never escape the parser.
+初期の選択候補は `visibility == "list"` を条件とし、`slug` を起動用ID、`display_name` と任意の `description` を表示に使うのが妥当です。ただし、これは根拠のある推定であり、`/model` と完全一致することは未検証です。対象アカウントで両方の候補を比較するまでは同等と断言しません。UIと `cx models --json` の出力には許可リスト化したフィールドだけを渡し、内部指示文を漏らさないようにします。
 
-Do not add a separate persistent cache in the MVP. On successful dynamic discovery, use the returned list immediately. On failure, offer bundled fallback only when the user explicitly enables it (for example `--fallback bundled`) or make that choice explicit in the selector; never silently present stale models as current. If a future cache is needed, store only sanitized fields under `${XDG_CACHE_HOME:-~/.cache}/cx/`, with source, CLI version, fetched time, and a short TTL. No authentication data belongs there.
+MVPでは独自の永続キャッシュを追加しません。取得に成功した一覧はその場で利用します。失敗時に同梱一覧へ切り替える場合は、ユーザーが明示的に指定する（例：`--fallback bundled`）か、選択画面上で選択を求めます。古い一覧を最新として無言で表示しません。将来キャッシュが必要なら `${XDG_CACHE_HOME:-~/.cache}/cx/` にフィルター済みデータだけを保存し、取得元、CLIバージョン、取得日時、有効期間を記録します。認証情報は保存しません。
 
-## 3. Implementation choice
+## 3. 実装方式の選定
 
-**Recommend Bash + jq + fzf**, with mise optional for repeatable dependency setup.
+**Bash + jq + fzfを推奨し、miseは任意とします。**
 
-| Option | Trade-off | Decision |
+| 案 | 評価 | 判断 |
 | --- | --- | --- |
-| Bash + jq + fzf | Low startup cost; excellent shell argument transparency; each dependency has a narrow role; jq provides strict JSON parsing | Best fit for a small launcher. Require Codex, jq, and fzf for dynamic interactive selection; use mise as a convenience, not runtime |
-| Python | Strong JSON handling and test ergonomics | Extra interpreter/runtime packaging for a process wrapper; reconsider only if logic grows beyond a thin adapter |
-| Rust | Distributable single binary and strong types | Build/release matrix and TUI cost are too high for the initial narrow use case |
-| mise task | Convenient tool pinning and task aliases | Does not provide the UX by itself and couples a personal shortcut to mise; keep logic in `cx`, let mise provision jq/fzf optionally |
+| Bash + jq + fzf | 起動が軽く、シェル引数を安全に受け渡しやすい。各ツールの役割が明確で、jqでJSONを検証できる | 小さな起動ツールに最適。動的一覧を対話選択するにはCodex、jq、fzfを使う。miseは補助扱い |
+| Python | JSON処理とテストが容易 | 単純なプロセス起動のために追加ランタイムを配布・管理することになる。処理が増えた段階で再検討 |
+| Rust | 単一バイナリとして配布でき、型で安全性を高められる | 初期のビルドと複数OS向け配布の負担が、この小さな用途には大きい |
+| miseタスク | ツールのバージョン固定やタスク実行に便利 | それ単体では選択UIを作れず、miseへの依存が生じる。処理は `cx` に置き、miseはjq/fzf導入の補助に使う |
 
-The app is the executable shell script; `mise.toml` may pin jq/fzf versions and provide install/doctor tasks, but `cx` must work without mise when dependencies are already installed.
+実行ファイル本体はシェルスクリプトとします。`mise.toml` は任意のjq/fzfバージョン管理やタスクを提供できますが、必要なツールがPATH上にあればmiseなしでも `cx` を動かせるようにします。
 
-## 4. Proposed CLI contract
+## 4. CLIインターフェース案
 
 ```text
 cx [CODEX-ARGS...]
@@ -59,78 +59,78 @@ cx models [--json] [--bundled]
 cx doctor
 ```
 
-- Bare `cx` discovers models, presents fzf, then `exec`s Codex with `-m ID` and all caller arguments.
-- `cx --help`, `cx -h`, and `cx --version` bypass the picker and pass straight to Codex.
-- If caller args contain `-m ID`, `--model ID`, or `--model=ID`, bypass discovery and pass the full original argument vector unchanged. The caller's explicit model wins; duplicate model flags are left to Codex to diagnose rather than guessed at by the wrapper.
-- `cx resume ...` selects a model and launches `codex resume ... -m ID` (or an equivalent parser-verified arrangement). Explicit model flags again bypass selection.
-- A selected model is a per-process launch argument. The wrapper never edits `config.toml`, shell rc files, or Codex cache files.
-- Preserve current working directory. Do not convert arguments to a shell command string; use arrays and `exec codex ... "$@"`.
-- `cx models` prints safe, sanitized fields. `cx models --json` emits a documented object such as `{"source":"remote","models":[{"id":"...","name":"...","description":"..."}]}`. It is the wrapper's stable output contract, independent of Codex's raw JSON schema.
-- `cx models --bundled` invokes `codex debug models --bundled` and returns source `bundled`; normal `cx models` uses dynamic discovery.
+- 引数なしの `cx` はモデル一覧を取得し、fzfで選択後、選んだIDと指定された引数を付けてCodexを `exec` します。
+- `cx --help`、`cx -h`、`cx --version` は選択画面を出さず、そのままCodexへ渡します。
+- 引数に `-m ID`、`--model ID`、`--model=ID` のいずれかがあれば、取得や選択を行わず、元の引数をそのまま渡します。明示されたモデルを優先し、重複モデル指定の解釈はCodexに任せます。
+- `cx resume ...` はモデルを選んで `codex resume ... -m ID` を起動します（オプション配置は実装時にCLIで確認）。明示的なモデル指定があれば選択を省きます。
+- 選択モデルは起動プロセスへの引数として渡します。ラッパーは `config.toml`、シェル設定ファイル、Codexキャッシュを編集しません。
+- 作業ディレクトリを維持します。引数をシェルコマンド文字列に連結せず、配列と `exec codex ... "$@"` で渡します。
+- `cx models` は安全なフィールドのみ表示します。`cx models --json` は `{"source":"remote","models":[{"id":"...","name":"...","description":"..."}]}` のような、Codex側のraw形式と独立した安定形式を出力します。
+- `cx models --bundled` は `codex debug models --bundled` を呼び出し、取得元を `bundled` として返します。通常の `cx models` は動的取得を使います。
 
-Interactive selection should use fzf defaults: arrow keys, incremental query, Enter selection, Escape/Ctrl-C cancellation. If canceled, exit with a cancellation status and never start Codex. The selected label is for humans only; only the `slug`/ID is passed to `-m`.
+fzfの標準操作を使います。矢印キーで移動し、入力しながら検索し、Enterで確定します。EscまたはCtrl+Cでキャンセルした場合はキャンセル終了コードで終了し、Codexを起動しません。人間向けには表示名を見せ、`-m` に渡すのはIDだけです。
 
-## 5. Suggested module layout
+## 5. モジュール構成案
 
 ```text
-bin/cx                         standalone executable
-modules/codex/models.sh        discovery, filtering, source/fallback
-modules/codex/select.sh        fzf input and selected ID
-modules/codex/launch.sh        argument classification and exec
-lib/json.sh                    jq schema validation / safe projection
-tests/fixtures/models-valid.json
-tests/fixtures/models-unexpected.json
-tests/mocks/codex
-tests/mocks/fzf
-mise.toml                      optional jq/fzf version and tasks
+bin/cx                              単独起動できる実行ファイル
+modules/codex/models.sh             一覧取得、フィルター、取得元と代替処理
+modules/codex/select.sh             fzf入力と選択IDの返却
+modules/codex/launch.sh             引数の判定とCodex起動
+lib/json.sh                         jqによるスキーマ検証と安全なフィールド抽出
+tests/fixtures/models-valid.json    正常なモデル一覧のテストデータ
+tests/fixtures/models-unexpected.json 想定外フィールドを含むテストデータ
+tests/mocks/codex                  Codexのモック
+tests/mocks/fzf                    fzfのモック
+mise.toml                           任意のjq/fzf管理とタスク
 ```
 
-To integrate with devkit, `bin/dev agent model` should call the same discovery/selection function (or `cx models` / a machine interface) rather than maintaining a second model catalog. `cx` remains the standalone user-facing shortcut.
+devkitへ統合するときは `dev agent model` から同じ取得・選択関数、または `cx models` の機械向けインターフェースを呼び、一覧を二重管理しないようにします。`cx` は単独の利用コマンドとして残します。
 
-## 6. Errors and fallbacks
+## 6. エラー処理とフォールバック
 
-| Condition | Behavior |
+| 状況 | 動作 |
 | --- | --- |
-| `codex` absent | Clear diagnostic, exit 127 |
-| `jq` or `fzf` absent for interactive mode | Name missing dependency and show install guidance; do not invoke Codex with an implicit model |
-| discovery command unsupported / JSON invalid / required fields missing | Explain incompatible Codex CLI/catalog; nonzero exit; allow explicit bundled fallback |
-| remote discovery failure or empty visible list | Distinguish failure from valid empty result; do not silently select a hidden/default model |
-| Escape/Ctrl-C | Nonzero cancellation exit; no Codex child process |
-| unknown JSON fields | Ignore them; do not fail just because upstream adds optional metadata |
-| invalid/non-string ID or display label | Drop malformed entry; if no valid entries remain, report schema error |
-| Codex exit | `exec` preserves its exit code and signal behavior |
+| `codex` がない | 明確な診断を出し、終了コード127で終了 |
+| 対話選択に必要な `jq` または `fzf` がない | 不足している依存を示し、導入方法を案内する。暗黙のモデルで起動しない |
+| コマンドが未対応、JSON不正、必須フィールド不足 | Codex CLIまたはカタログの非互換を説明し、非ゼロで終了。明示的な同梱一覧への切替を許可 |
+| 動的取得失敗、または表示候補が空 | 取得失敗と有効な空一覧を区別する。非表示モデルやデフォルトモデルを勝手に選ばない |
+| EscまたはCtrl+C | キャンセルとして非ゼロ終了し、Codexを起動しない |
+| 未知のJSONフィールド | 上流の任意フィールド追加は無視し、それだけで失敗にしない |
+| IDまたは表示名が文字列でない・空 | 不正項目を除外し、有効項目がなければ形式エラーを報告 |
+| Codexの終了 | `exec` によってCodexの終了コードとシグナル動作を引き継ぐ |
 
-Never log raw model JSON, command environment, or tokens. Validate IDs as non-empty strings and pass them as a single argv element; no `eval` or shell interpolation.
+raw JSON、プロセス環境、トークンをログに出しません。IDは空でない文字列か検証し、argvの1要素として渡します。`eval` やシェル文字列への展開は使いません。
 
-## 7. Test plan
+## 7. テスト計画
 
-Tests use temporary mock executables placed first on `PATH`; no real Codex session or network call is needed for unit coverage.
+テストでは一時ディレクトリにCodexとfzfのモックを置き、PATHの先頭から呼び出します。単体テストに実セッションやネットワーク接続は必要ありません。
 
-1. Project valid model JSON to `id`, `name`, `description` only; ensure internal fields are absent.
-2. Parse missing `models`, wrong types, empty list, hidden entries, and unknown extra fields.
-3. Verify label and ID stay paired even with spaces, quotes, or Unicode in labels.
-4. fzf mock returns selected ID; cancellation returns nonzero and leaves the codex mock log empty.
-5. Codex mock records argv boundaries and current directory for regular launch, `--cd` with a space, sandbox flags, prompt arguments, and `resume --last`.
-6. Explicit `-m`, `--model`, and `--model=...` bypass the picker and preserve args exactly.
-7. `--help` / `--version` bypass model lookup.
-8. Mock Codex exits with a chosen status; wrapper returns the same status.
-9. Hash `~/.codex/config.toml` (or a temporary `CODEX_HOME`) before and after a mocked launch and assert unchanged. A separate manual acceptance check should run an actual TUI launch and inspect config before/after; this is needed to validate end-to-end behavior, not the mocked argument builder.
-10. Run shell syntax checks and the same fixture suite on macOS and Ubuntu/WSL2; verify Bash 3.2-compatible syntax if supporting Apple's system Bash.
+1. 正常なJSONから `id`、`name`、`description` だけを抽出し、内部フィールドを出力しない。
+2. `models` 欠落、型違い、空配列、非表示項目、未知の追加フィールドを検査する。
+3. 表示名に空白、引用符、UnicodeがあってもIDとの対応が崩れない。
+4. fzfモックが返したIDで起動する。キャンセル時は非ゼロ終了し、Codexモックのログが空である。
+5. Codexモックが引数の境界と作業ディレクトリを記録し、通常起動、空白を含む `--cd`、sandbox引数、プロンプト引数、`resume --last` を確認する。
+6. 明示的な `-m`、`--model`、`--model=...` で選択画面を省き、引数を変えずに渡す。
+7. `--help` と `--version` で一覧取得を省く。
+8. モックCodexの終了コードがラッパーからそのまま返る。
+9. `~/.codex/config.toml` または一時 `CODEX_HOME` の設定ファイルを起動の前後でハッシュ比較し、モック起動では不変であることを確認する。別途、実際のTUIを起動して前後を比較する手動受け入れ確認も行う。
+10. macOSとUbuntu/WSL2でシェル構文とフィクスチャテストを実行する。Apple標準のBashもサポートするならBash 3.2互換性も確認する。
 
-## 8. MVP implementation order
+## 8. MVPの実装手順
 
-1. Keep the current skeleton's Codex adapter boundary, but replace its hand-maintained-only model list with a dedicated `codex debug models` parser.
-2. Add strict jq allowlist projection and catalog validation; document the Experimental dependency.
-3. Implement fzf selection with cancel semantics and an explicit bundled fallback.
-4. Implement argument routing, help/version bypass, explicit `-m` bypass, resume routing, and `exec` pass-through.
-5. Add `models`, `models --json`, and `doctor` commands with stable output and actionable dependency checks.
-6. Add mocked tests for argument safety, filtering, cancellation, exit status, CWD, and config non-mutation.
-7. Validate on macOS and Ubuntu, compare `cx models` to the interactive `/model` list, and manually verify selected model and config behavior in a real session.
-8. Add optional mise setup and a clone/symlink installation note; keep the script runnable directly from a Git checkout and updateable with `git pull`.
+1. 現在の骨組みにあるCodexアダプター境界を保ちつつ、手書き一覧を `codex debug models` の専用パーサーに置き換える。
+2. jqで許可フィールドだけを抽出し、カタログを検証する。Experimentalコマンド依存も説明する。
+3. キャンセル処理と、明示的に選ぶ同梱一覧フォールバックを実装する。
+4. help/version、明示的な `-m`、resume、引数透過、`exec` を実装する。
+5. 安定した出力形式と依存診断を備えた `models`、`models --json`、`doctor` を追加する。
+6. 引数安全性、JSON抽出、キャンセル、終了コード、作業ディレクトリ、設定不変性についてモックテストを追加する。
+7. macOSとUbuntuで検証する。`cx models` と `/model` の候補を比較し、実セッションで選択モデルと設定ファイルへの影響を確認する。
+8. 任意のmise設定とclone/symlink導入手順を整える。Gitチェックアウトから直接実行でき、`git pull` で更新できるようにする。
 
-### Open verification gates before calling MVP complete
+### MVP完了前に確認する事項
 
-- Does dynamic `codex debug models` use account-visible state on the installed CLI, and does its `visibility == "list"` subset match `/model`?
-- What nonzero status and stderr behavior occur offline or when the refresh fails?
-- Does launching with `-m` leave the default config unchanged, and does the chosen model apply only to that new session?
-- Does model override behave as expected when resuming an older session with a different reasoning-effort setting?
+- 動的な `codex debug models` が利用アカウントに応じた一覧を返すか。また `visibility == "list"` が `/model` の候補と一致するか。
+- オフラインや更新失敗時に、どの終了コードと標準エラーが返るか。
+- `-m` で起動したときデフォルト設定が変わらず、選んだモデルが新しいセッションだけに反映されるか。
+- 推論量設定が異なる過去セッションを別モデルで再開した際、互換性の問題が起きないか。
