@@ -21,12 +21,14 @@
 
 ```text
 cx [CODEX-ARGS...]
+cx --bundled [CODEX-ARGS...]
 cx resume [--last | SESSION_ID] [CODEX-ARGS...]
 cx models [--json] [--bundled]
 cx doctor
 ```
 
 - `cx` はfzfでモデルを選び、`codex -m MODEL` として起動する。resume時は `codex resume ... -m MODEL` を使う。
+- `cx --bundled` は同梱カタログを明示的に使って選択する。
 - `-m MODEL`、`--model MODEL`、`--model=MODEL` が指定された場合は選択を省き、引数をそのままCodexへ渡す。
 - `--help`、`-h`、`--version` はモデル取得や選択を行わずCodexへ渡す。
 - 引数配列を保ったまま `exec` し、現在の作業ディレクトリとCodexの終了コードを維持する。`eval` は使わない。

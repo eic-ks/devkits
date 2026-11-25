@@ -1,5 +1,6 @@
 [tools]
 fzf = "latest"
+jq = "latest"
 
 [tasks]
 doctor = "./bin/dev env doctor"

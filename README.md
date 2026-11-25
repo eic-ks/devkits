@@ -11,21 +11,25 @@ cd devkits
 dev env doctor
 ```
 
-The installer creates a symlink in `~/.local/bin` (or `DEVKIT_BIN_DIR`) and does not install or update tools. Set `codex_model=MODEL` in `${XDG_CONFIG_HOME:-~/.config}/devkit/config`, or pass a model explicitly. Interactive selection requires `fzf` and model IDs in `config/codex-models.txt`.
+The installer creates `dev` and `cx` symlinks in `~/.local/bin` (or `DEVKIT_BIN_DIR`) and does not install or update tools. The Codex model selector requires Codex CLI, `jq`, and `fzf`; use `mise install` to provision the optional dependencies listed in `mise.toml`.
 
 ## Commands
 
 - `dev env doctor [--json]`: read-only availability check for mise, Git, Python, uv, Docker, SSH, and Codex.
 - `dev env info`: show OS, architecture, and paths.
-- `dev agent model [MODEL]`: print a configured model or select from the local catalog.
-- `dev agent launch [MODEL]`: run `codex -m MODEL`.
+- `dev agent model [MODEL]`: print a model ID or interactively select one.
+- `dev agent launch [CODEX-ARGS...]`: choose a model and launch Codex, or pass an explicit `-m/--model` through.
 - `dev agent doctor`: check Codex CLI and optional `fzf`.
 - `dev sandbox doctor`: inspect optional external adapter configuration.
+- `cx [CODEX-ARGS...]`: choose a model and launch Codex directly.
+- `cx resume [--last | SESSION_ID]`: choose a model and resume a Codex session.
+- `cx models [--json] [--bundled]`: list visible models, optionally as sanitized JSON or from the bundled catalog.
+- `cx doctor`: check the model selector dependencies and catalog command.
 
-Codex model discovery is intentionally user-configured until the installed CLI's supported discovery interface is verified. Credentials do not belong in this repository.
+`cx` reads the catalog from `codex debug models`, an Experimental Codex CLI command. Use `cx --bundled` or `cx models --bundled` to explicitly use the catalog shipped with the installed Codex CLI. Credentials do not belong in this repository.
 
 ## Layout
 
-`bin/dev` routes commands to `modules/agent`, `modules/env`, and `modules/sandbox`. Shared configuration helpers live in `modules/lib`. The sandbox module is only an adapter boundary; it does not claim to provide container isolation.
+`bin/dev` and `bin/cx` are command entry points. Codex model discovery, selection, and launch live in `modules/codex` and are shared with `dev agent`. Other feature code lives in `modules/agent`, `modules/env`, and `modules/sandbox`. Shared configuration helpers live in `modules/lib`. The sandbox module is only an adapter boundary; it does not claim to provide container isolation.
 
 Requires Bash 3.2 or newer. `mise.toml` provides optional `fzf` setup and task aliases. Mise itself is not required to run the CLI.

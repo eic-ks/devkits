@@ -1,3 +1,2 @@
 # ${XDG_CONFIG_HOME:-~/.config}/devkit/config にコピーしてください。
-# codex_model=モデル名
 # sandbox_adapter=アダプターのコマンド名

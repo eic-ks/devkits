@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SOURCE="${BASH_SOURCE[0]}"
+while [[ -h "$SOURCE" ]]; do
+  SOURCE_DIR="$(cd -P "$(dirname -- "$SOURCE")" && pwd)"
+  TARGET="$(readlink "$SOURCE")"
+  if [[ "$TARGET" == /* ]]; then SOURCE="$TARGET"; else SOURCE="$SOURCE_DIR/$TARGET"; fi
+done
+ROOT="$(cd -P "$(dirname -- "$SOURCE")/.." && pwd)"
+source "$ROOT/modules/codex/models.sh"
+source "$ROOT/modules/codex/select.sh"
+source "$ROOT/modules/codex/launch.sh"
+
+usage() {
+  cat <<'EOF'
+cx — choose a Codex model and launch Codex
+
+Usage:
+  cx [CODEX-ARGS...]
+  cx --bundled [CODEX-ARGS...]
+  cx resume [--last | SESSION_ID] [CODEX-ARGS...]
+  cx models [--json] [--bundled]
+  cx doctor
+  cx help
+
+Explicit -m/--model and Codex help/version options bypass model selection.
+EOF
+}
+
+doctor() {
+  local failed=0 command_name
+  for command_name in codex jq fzf; do
+    if command -v "$command_name" >/dev/null 2>&1; then
+      printf '%-8s available  %s\n' "$command_name" "$(command -v "$command_name")"
+    else
+      printf '%-8s missing\n' "$command_name"
+      failed=1
+    fi
+  done
+  if command -v codex >/dev/null 2>&1; then
+    if codex debug models --help >/dev/null 2>&1; then printf 'catalog  available  codex debug models\n'; else printf 'catalog  unsupported  update Codex CLI\n'; failed=1; fi
+  fi
+  return "$failed"
+}
+
+case "${1:-}" in
+  help) usage ;;
+  models)
+    shift
+    source_name=codex
+    format=text
+    for arg in "$@"; do
+      case "$arg" in
+        --json) format=json ;;
+        --bundled) source_name=bundled ;;
+        -h|--help) usage; exit 0 ;;
+        *) printf 'cx: error: unknown models option: %s\n' "$arg" >&2; exit 2 ;;
+      esac
+    done
+    cx_models_command "$source_name" "$format"
+    ;;
+  doctor) doctor ;;
+  --bundled) shift; cx_launch bundled "$@" ;;
+  *) cx_launch codex "$@" ;;
+esac
