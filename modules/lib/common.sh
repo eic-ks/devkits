@@ -6,4 +6,4 @@ devkit_config_value() {
   [[ -f "$file" ]] || return 1
   awk -F= -v key="$key" '$1 == key { sub(/^[^=]*=/, ""); print; exit }' "$file"
 }
-devkit_error() { printf 'dev: エラー: %s\n' "$*" >&2; }
+devkit_error() { printf 'dev: error: %s\n' "$*" >&2; }

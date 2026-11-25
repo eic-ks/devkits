@@ -4,9 +4,9 @@ ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/modules/lib/common.sh"
 case "${1:-help}:${2:-}" in
   help:*|-h:*|--help:*) cat <<'EOF'
-dev — 移植可能な開発者向けツールキット
-使い方: dev agent model [モデル名] | dev agent launch [モデル名] | dev agent doctor
-        dev env doctor [--json] | dev env info | dev sandbox doctor
+dev — Portable Developer Toolkit
+Usage: dev agent model [MODEL] | dev agent launch [MODEL] | dev agent doctor
+       dev env doctor [--json] | dev env info | dev sandbox doctor
 EOF
     ;;
   agent:model) shift 2; "$ROOT/modules/agent/agent.sh" model "${1:-}" ;;
@@ -15,5 +15,5 @@ EOF
   env:doctor) shift 2; "$ROOT/modules/env/env.sh" doctor "${1:-}" ;;
   env:info) "$ROOT/modules/env/env.sh" info ;;
   sandbox:doctor) "$ROOT/modules/sandbox/sandbox.sh" doctor ;;
-  *) printf '不明なコマンドです: %s\n' "$*" >&2; exit 2 ;;
+  *) printf 'Unknown command: %s\n' "$*" >&2; exit 2 ;;
 esac

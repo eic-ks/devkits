@@ -13,10 +13,10 @@ case "${1:-}" in
       done
       printf ']}\n'
     else
-      printf '%-10s %-10s %s\n' ツール 状態 パス
-      for tool in "${tools[@]}"; do if path="$(command -v "$tool" 2>/dev/null)"; then printf '%-10s %-10s %s\n' "$tool" 利用可能 "$path"; else printf '%-10s %-10s -\n' "$tool" 未導入; fi; done
+      printf '%-10s %-10s %s\n' TOOL STATUS PATH
+      for tool in "${tools[@]}"; do if path="$(command -v "$tool" 2>/dev/null)"; then printf '%-10s %-10s %s\n' "$tool" available "$path"; else printf '%-10s %-10s -\n' "$tool" missing; fi; done
     fi
     ;;
-  info) printf 'OS: %s\nCPUアーキテクチャ: %s\ndevkitの場所: %s\n設定ファイルの場所: %s\n' "$(uname -s)" "$(uname -m)" "$ROOT" "$(devkit_config_dir)" ;;
-  *) devkit_error 'envの操作が不明です'; exit 2 ;;
+  info) printf 'os: %s\narch: %s\ndevkit: %s\nconfig: %s\n' "$(uname -s)" "$(uname -m)" "$ROOT" "$(devkit_config_dir)" ;;
+  *) devkit_error 'unknown env operation'; exit 2 ;;
 esac
