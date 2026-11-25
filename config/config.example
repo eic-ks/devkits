@@ -1,0 +1,3 @@
+# Copy to ${XDG_CONFIG_HOME:-~/.config}/devkit/config
+# codex_model=MODEL
+# sandbox_adapter=adapter-command

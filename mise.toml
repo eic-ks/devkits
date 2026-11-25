@@ -1,0 +1,6 @@
+[tools]
+fzf = "latest"
+
+[tasks]
+doctor = "./bin/dev env doctor"
+info = "./bin/dev env info"

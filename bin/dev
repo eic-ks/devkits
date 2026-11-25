@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT/modules/lib/common.sh"
+case "${1:-help}:${2:-}" in
+  help:*|-h:*|--help:*) cat <<'EOF'
+dev — Portable Developer Toolkit
+Usage: dev agent model [MODEL] | dev agent launch [MODEL] | dev agent doctor
+       dev env doctor [--json] | dev env info | dev sandbox doctor
+EOF
+    ;;
+  agent:model) shift 2; "$ROOT/modules/agent/agent.sh" model "${1:-}" ;;
+  agent:launch) shift 2; "$ROOT/modules/agent/agent.sh" launch "${1:-}" ;;
+  agent:doctor) "$ROOT/modules/agent/agent.sh" doctor ;;
+  env:doctor) shift 2; "$ROOT/modules/env/env.sh" doctor "${1:-}" ;;
+  env:info) "$ROOT/modules/env/env.sh" info ;;
+  sandbox:doctor) "$ROOT/modules/sandbox/sandbox.sh" doctor ;;
+  *) printf 'Unknown command: %s\n' "$*" >&2; exit 2 ;;
+esac
